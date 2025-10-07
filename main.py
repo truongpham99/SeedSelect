@@ -96,6 +96,7 @@ def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_
                                                     clip_transform=clip_transform,
                                                     clip_img_centroid=clip_centroid)
         if i != 0 or show_first_image == True:
+            image_pil.save(f"./results/{i}_image.JPEG")
             plt.imshow(image_pil)
             plt.axis("off")
             plt.tight_layout()

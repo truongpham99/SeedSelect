@@ -27,7 +27,7 @@ class VaeDataset(Dataset):
         self._length = self.num_images
 
         self.interpolation = {
-            "linear": PIL.Image.LINEAR,
+            "linear": PIL.Image.BILINEAR,
             "bilinear": PIL.Image.BILINEAR,
             "bicubic": PIL.Image.BICUBIC,
             "lanczos": PIL.Image.LANCZOS,

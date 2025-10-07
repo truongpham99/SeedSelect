@@ -26,10 +26,11 @@ class SeedOptimizationStableDiffusion(StableDiffusionPipeline):
             scheduler,
             safety_checker,
             feature_extractor,
+            image_encoder,
             requires_safety_checker: bool = True,
     ):
         super().__init__(vae, text_encoder, tokenizer, unet, scheduler, safety_checker, feature_extractor,
-                         requires_safety_checker)
+                         image_encoder, requires_safety_checker)
         # enable checkpointing
         self.text_encoder.gradient_checkpointing_enable()
         self.unet.enable_gradient_checkpointing()
