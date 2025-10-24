@@ -63,10 +63,25 @@ class VaeDataset(Dataset):
         example["pixel_values"] = torch.from_numpy(image).permute(2, 0, 1)
         return example
 
+def sample_rows(X: torch.Tensor, m: int = 5, replace: bool = False):
+    n = X.shape[0]
+    if replace:
+        # uniform with replacement
+        idx = torch.multinomial(torch.ones(n, device=X.device), m, replacement=True)
+    else:
+        # without replacement (use min in case n < m)
+        idx = torch.randperm(n, device=X.device)[:min(m, n)]
+    return X[idx]
 
-def vae_encode(vae, folder_path):
+
+def vae_encode(vae, folder_path, subset=None):
     if "vae_latents.pt" in os.listdir(folder_path):
-        return torch.load(f"{folder_path}/vae_latents.pt")
+        all_vae_latents = torch.load(f"{folder_path}/vae_latents.pt")
+        if not subset:
+            return all_vae_latents
+        else:
+            return sample_rows(all_vae_latents)
+
     else:
         with torch.no_grad():
             train_dataset = VaeDataset(
@@ -89,9 +104,14 @@ def vae_encode(vae, folder_path):
             return all_vae_latents
 
 
-def clip_encode(clip, img_transform, folder_path):
+def clip_encode(clip, img_transform, folder_path, subset=None):
     if "vae_latents.pt" in os.listdir(folder_path):
-        return torch.load(f"{folder_path}/clip_embeddings.pt")
+        clip_embeddings = torch.load(f"{folder_path}/clip_embeddings.pt")
+        if not subset:
+            return clip_embeddings
+        else:
+            return sample_rows(clip_embeddings)
+
     else:
         with torch.no_grad():
             clip_embeddings = []

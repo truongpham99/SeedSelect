@@ -78,9 +78,10 @@ def prepare_models():
     return sd_model, sd_model.vae, clip, clip_transform
 
 
-def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_centroid, vae_centroid,
+def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_centroid, vae_centroid, count
                   n_iters=30, guidance_scale=7.5, lr=0.05, show_first_image=True):
-    img_seed = torch.nn.Parameter(init_seed.reshape((1, 4, 64, 64)), requires_grad=True)
+    if count == 0
+        img_seed = torch.nn.Parameter(init_seed.reshape((1, 4, 64, 64)), requires_grad=True)
 
     optimizer = torch.optim.AdamW([img_seed], lr=lr)
     weights = torch.tensor([0.05, 0.25, 0.7]).cuda().T
@@ -95,18 +96,27 @@ def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_
                                                     guidance_scale=guidance_scale,
                                                     clip_transform=clip_transform,
                                                     clip_img_centroid=clip_centroid)
-        if i != 0 or show_first_image == True:
-            image_pil.save(f"./results/{i}_image.JPEG")
-            plt.imshow(image_pil)
-            plt.axis("off")
-            plt.tight_layout()
-            plt.show()
 
         semantic_loss = weights @ torch.stack(losses).squeeze(-1)
         appearance_loss = F.mse_loss(latents, vae_centroid, reduction="none").mean([1, 2, 3]).mean()
         loss = 10 * semantic_loss + appearance_loss
         loss.backward()
         optimizer.step()
+
+        # if i != 0 or show_first_image == True:
+        #     image_pil.save(f"./results/{i}_image.JPEG")
+        #     plt.imshow(image_pil)
+        #     plt.axis("off")
+        #     plt.tight_layout()
+        #     plt.show()
+        os.makedirs("./results", exist_ok=True)
+        os.makedirs("./results/ss/", exist_ok=True)
+        os.makedirs(f"./results/ss/{prompt}", exist_ok=True)
+
+        image_pil.save(f"./results/ss/{prompt}/image_{count}.JPEG")
+
+    return latents
+    
 
 
 if __name__ == "__main__":
@@ -142,42 +152,48 @@ if __name__ == "__main__":
                                              guidance_scale=7.5,
                                              img_seed=init_seed,
                                              run_raw_sd=True)
-            plt.imshow(image_pil)
-            plt.axis("off")
-            plt.tight_layout()
-            plt.show()
+            # plt.imshow(image_pil)
+            # plt.axis("off")
+            # plt.tight_layout()
+            # plt.show()
+            image_pil.save(f"./results/sd/{prompt}/image_{count}.JPEG")
+
     elif sys.argv[1] == "SeedSelect":
         # run SeedSelect
         init_seed = torch.randn(shape, device=sd_model.device, dtype=clip_centroid.dtype).to(
-            "cuda") * sd_model.scheduler.init_noise_sigma
-        ### hyper-parameters
-        n_optimization_iters = 30
-        lr = 0.1
-        ###
-        optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform.transforms, clip_centroid, vae_centroid,
-                      n_iters=n_optimization_iters, guidance_scale=7.5, lr=lr)
+                "cuda") * sd_model.scheduler.init_noise_sigma
+        for i in range(10):
+            ### hyper-parameters
+            n_optimization_iters = 30
+            lr = 0.1
+            ###
+            init_seed = optimize_seed(init_seed, prompt, sd_model, 
+                        clip_model, clip_transform.transforms, 
+                        clip_centroid, vae_centroid,
+                        i,
+                        n_iters=n_optimization_iters, guidance_scale=7.5, lr=lr)
 
-    elif sys.argv[1] == "NAO_SeedSelect":
-        # run SeedSelect initialized with NAO seeds
-        all_real_x_t = image_folder_to_ddim(img_folder, prompt, sd_model)
-        p1 = all_real_x_t[4].reshape((1, 4, 64, 64)).to("cuda")
-        p2 = all_real_x_t[3].reshape((1, 4, 64, 64)).to("cuda")
-        dim = 4 * 64 * 64
+    # elif sys.argv[1] == "NAO_SeedSelect":
+    #     # run SeedSelect initialized with NAO seeds
+    #     all_real_x_t = image_folder_to_ddim(img_folder, prompt, sd_model)
+    #     p1 = all_real_x_t[4].reshape((1, 4, 64, 64)).to("cuda")
+    #     p2 = all_real_x_t[3].reshape((1, 4, 64, 64)).to("cuda")
+    #     dim = 4 * 64 * 64
 
-        ### hyper-parameters
-        n_points = 50  # number of points between a centroid to an inversion
-        n_optimization_iters = 5
-        lr = 0.05
-        p1 = p1.reshape(1, -1).T
-        p2 = p2.reshape(1, -1).T
-        eps = 2 * (torch.norm(p1 - p2) / n_points)
-        ###
+    #     ### hyper-parameters
+    #     n_points = 50  # number of points between a centroid to an inversion
+    #     n_optimization_iters = 5
+    #     lr = 0.05
+    #     p1 = p1.reshape(1, -1).T
+    #     p2 = p2.reshape(1, -1).T
+    #     eps = 2 * (torch.norm(p1 - p2) / n_points)
+    #     ###
 
-        log_chi_dist = lambda x: ((dim - 1) * torch.log(x) - 0.5 * torch.pow(x, 2)) - (
-                (0.5 * dim - 1) * torch.log(torch.tensor(2.0)) + torch.lgamma(torch.tensor(dim / 2)))
-        c, paths_ls = norm_aware_centroid_optimization(log_chi_dist, [p1, p2], n_points, eps, init_c=slerp(0.5, p1, p2))
-        for path in paths_ls:
-            for seed_i in path:
-                optimize_seed(seed_i, prompt, sd_model, clip_model, clip_transform.transforms, clip_centroid,
-                              vae_centroid, n_iters=n_optimization_iters, guidance_scale=1, lr=lr,
-                              show_first_image=False)
+    #     log_chi_dist = lambda x: ((dim - 1) * torch.log(x) - 0.5 * torch.pow(x, 2)) - (
+    #             (0.5 * dim - 1) * torch.log(torch.tensor(2.0)) + torch.lgamma(torch.tensor(dim / 2)))
+    #     c, paths_ls = norm_aware_centroid_optimization(log_chi_dist, [p1, p2], n_points, eps, init_c=slerp(0.5, p1, p2))
+    #     for path in paths_ls:
+    #         for seed_i in path:
+    #             optimize_seed(seed_i, prompt, sd_model, clip_model, clip_transform.transforms, clip_centroid,
+    #                           vae_centroid, n_iters=n_optimization_iters, guidance_scale=1, lr=lr,
+    #                           show_first_image=False)
