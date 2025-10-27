@@ -11,8 +11,9 @@ from SeedOptimizationStableDiffusion import SeedOptimizationStableDiffusion
 import torch.nn.functional as F
 import numpy as np
 from encode_images import vae_encode, clip_encode
-from nao.ddim_inversion import image_folder_to_ddim
-from nao.norm_aware_optimization import norm_aware_centroid_optimization
+import os
+# from nao.ddim_inversion import image_folder_to_ddim
+# from nao.norm_aware_optimization import norm_aware_centroid_optimization
 
 
 def slerp(t, v0, v1, DOT_THRESHOLD=0.9995):
@@ -78,13 +79,20 @@ def prepare_models():
     return sd_model, sd_model.vae, clip, clip_transform
 
 
-def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_centroid, vae_centroid, count
+def seedselect_loss(losses, latents, vae_centroid):
+    weights = torch.tensor([0.05, 0.25, 0.7]).cuda().T
+
+    semantic_loss = weights @ torch.stack(losses).squeeze(-1)
+    appearance_loss = F.mse_loss(latents, vae_centroid, reduction="none").mean([1, 2, 3]).mean()
+    return 10 * semantic_loss + appearance_loss
+
+
+def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_centroid, vae_centroid, count,
                   n_iters=30, guidance_scale=7.5, lr=0.05, show_first_image=True):
-    if count == 0
-        img_seed = torch.nn.Parameter(init_seed.reshape((1, 4, 64, 64)), requires_grad=True)
+
+    img_seed = torch.nn.Parameter(init_seed.reshape((1, 4, 64, 64)), requires_grad=True)
 
     optimizer = torch.optim.AdamW([img_seed], lr=lr)
-    weights = torch.tensor([0.05, 0.25, 0.7]).cuda().T
     for i in tqdm(range(n_iters)):
         if i == 3:
             for g in optimizer.param_groups:
@@ -97,9 +105,7 @@ def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_
                                                     clip_transform=clip_transform,
                                                     clip_img_centroid=clip_centroid)
 
-        semantic_loss = weights @ torch.stack(losses).squeeze(-1)
-        appearance_loss = F.mse_loss(latents, vae_centroid, reduction="none").mean([1, 2, 3]).mean()
-        loss = 10 * semantic_loss + appearance_loss
+        loss = seedselect_loss(losses, latents, vae_centroid)
         loss.backward()
         optimizer.step()
 
@@ -109,13 +115,13 @@ def optimize_seed(init_seed, prompt, sd_model, clip_model, clip_transform, clip_
         #     plt.axis("off")
         #     plt.tight_layout()
         #     plt.show()
-        os.makedirs("./results", exist_ok=True)
-        os.makedirs("./results/ss/", exist_ok=True)
-        os.makedirs(f"./results/ss/{prompt}", exist_ok=True)
+    os.makedirs("./results", exist_ok=True)
+    os.makedirs("./results/ss/", exist_ok=True)
+    os.makedirs(f"./results/ss/{prompt}", exist_ok=True)
 
-        image_pil.save(f"./results/ss/{prompt}/image_{count}.JPEG")
+    image_pil.save(f"./results/ss/{prompt}/image_{count}.JPEG")
 
-    return latents
+    return latents.detach()
     
 
 
@@ -156,7 +162,7 @@ if __name__ == "__main__":
             # plt.axis("off")
             # plt.tight_layout()
             # plt.show()
-            image_pil.save(f"./results/sd/{prompt}/image_{count}.JPEG")
+            image_pil.save(f"./results/sd/{prompt}/image.JPEG")
 
     elif sys.argv[1] == "SeedSelect":
         # run SeedSelect
@@ -167,7 +173,10 @@ if __name__ == "__main__":
             n_optimization_iters = 30
             lr = 0.1
             ###
-            init_seed = optimize_seed(init_seed, prompt, sd_model, 
+            init_seed = torch.randn(shape, device=sd_model.device, dtype=clip_centroid.dtype).to(
+                "cuda") * sd_model.scheduler.init_noise_sigma
+
+            _ = optimize_seed(init_seed, prompt, sd_model, 
                         clip_model, clip_transform.transforms, 
                         clip_centroid, vae_centroid,
                         i,
