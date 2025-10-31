@@ -176,7 +176,7 @@ if __name__ == "__main__":
             init_seed = torch.randn(shape, device=sd_model.device, dtype=clip_centroid.dtype).to(
                 "cuda") * sd_model.scheduler.init_noise_sigma
 
-            _ = optimize_seed(init_seed, prompt, sd_model, 
+            init_seed = optimize_seed(init_seed, prompt, sd_model, 
                         clip_model, clip_transform.transforms, 
                         clip_centroid, vae_centroid,
                         i,
